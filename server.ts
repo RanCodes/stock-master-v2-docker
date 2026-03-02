@@ -136,6 +136,16 @@ app.post("/api/config", (req, res) => {
   res.json({ success: true });
 });
 
+
+app.get("/api/export/db", (req, res) => {
+  const dbPath = path.join(dataDir, "stock.db");
+  if (!fs.existsSync(dbPath)) {
+    return res.status(404).send("No hay base de datos para exportar");
+  }
+
+  res.download(dbPath, "stock.db");
+});
+
 app.get("/api/export", (req, res) => {
   const products = db.prepare("SELECT * FROM products ORDER BY created_at DESC").all();
   
