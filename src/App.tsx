@@ -23,26 +23,43 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
   const startCamera = async () => {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, 
-        audio: false 
-      });
-      setStream(s);
-      setShowCamera(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      alert("No se pudo acceder a la cámara en vivo. Puedes tomar una foto con el selector del celular.");
-      fileInputRef.current?.click();
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('La cámara en vivo requiere HTTPS en celular. Usa "Seleccionar imagen" para tomar la foto.');
+      openFilePicker();
+      return;
     }
+
+    const constraints: MediaStreamConstraints[] = [
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      { video: true, audio: false }
+    ];
+
+    for (const constraint of constraints) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia(constraint);
+        setCameraError(null);
+        setStream(s);
+        setShowCamera(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+        }
+        return;
+      } catch (err) {
+        console.error('Error accessing camera with constraints:', constraint, err);
+      }
+    }
+
+    setCameraError('No se pudo abrir la cámara en vivo. Usa "Seleccionar imagen" para continuar.');
   };
 
   const handleFileCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,6 +67,7 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
     if (!file) return;
 
     onCapture(file);
+    setCameraError(null);
     setPreview(URL.createObjectURL(file));
   };
 
@@ -97,14 +115,26 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
             </button>
           </div>
         ) : (
-          <button 
-            type="button"
-            onClick={startCamera}
-            className="flex flex-col items-center gap-2 text-zinc-400 hover:text-zinc-600 transition-colors"
-          >
-            <Camera size={32} />
-            <span className="text-sm font-medium">Capturar Foto</span>
-          </button>
+          <div className="flex flex-col items-center gap-3 text-zinc-400">
+            <button 
+              type="button"
+              onClick={startCamera}
+              className="flex flex-col items-center gap-2 hover:text-zinc-600 transition-colors"
+            >
+              <Camera size={32} />
+              <span className="text-sm font-medium">Capturar Foto</span>
+            </button>
+            <button
+              type="button"
+              onClick={openFilePicker}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors"
+            >
+              Seleccionar imagen
+            </button>
+            {cameraError && (
+              <p className="text-[11px] px-4 text-center text-amber-700">{cameraError}</p>
+            )}
+          </div>
         )}
         <input
           ref={fileInputRef}
