@@ -23,6 +23,7 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -39,8 +40,17 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
       }
     } catch (err) {
       console.error("Error accessing camera:", err);
-      alert("No se pudo acceder a la cámara.");
+      alert("No se pudo acceder a la cámara en vivo. Puedes tomar una foto con el selector del celular.");
+      fileInputRef.current?.click();
     }
+  };
+
+  const handleFileCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    onCapture(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   const stopCamera = () => {
@@ -96,6 +106,14 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
             <span className="text-sm font-medium">Capturar Foto</span>
           </button>
         )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileCapture}
+          className="hidden"
+        />
 
         <AnimatePresence>
           {showCamera && (
@@ -263,6 +281,10 @@ export default function App() {
     window.open('/api/export', '_blank');
   };
 
+  const handleDbDownload = () => {
+    window.open('/api/export/db', '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans pb-24">
       {/* Header */}
@@ -273,13 +295,22 @@ export default function App() {
           </div>
           <h1 className="font-bold text-lg tracking-tight">StockMaster</h1>
         </div>
-        <button 
-          onClick={handleExport}
-          className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-        >
-          <Download size={16} />
-          <span>CSV</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+          >
+            <Download size={16} />
+            <span>CSV</span>
+          </button>
+          <button
+            onClick={handleDbDownload}
+            className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+          >
+            <Download size={16} />
+            <span>BD</span>
+          </button>
+        </div>
       </header>
 
       <main className="max-w-xl mx-auto p-6">
