@@ -1,0 +1,7 @@
+{
+  "name": "V2: StockMaster Pro",
+  "description": "Aplicación para recepción de stock con captura de fotos, SKU y exportación a CSV. Ahora con soporte para Docker y persistencia de datos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
