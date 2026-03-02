@@ -25,12 +25,39 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
   const [preview, setPreview] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const openFilePicker = () => {
     fileInputRef.current?.click();
   };
+
+  const openGalleryPicker = () => {
+    galleryInputRef.current?.click();
+  };
+
+  useEffect(() => {
+    if (!showCamera || !stream || !videoRef.current) return;
+
+    videoRef.current.srcObject = stream;
+    videoRef.current.play().catch((error) => {
+      console.error('Error playing camera stream', error);
+      setCameraError('No se pudo iniciar la vista previa de cámara. Probá con "Seleccionar de galería".');
+      stopCamera();
+    });
+  }, [showCamera, stream]);
+
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [stream, preview]);
 
   const startCamera = async () => {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -50,9 +77,6 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
         setCameraError(null);
         setStream(s);
         setShowCamera(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-        }
         return;
       } catch (err) {
         console.error('Error accessing camera with constraints:', constraint, err);
@@ -68,7 +92,11 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
 
     onCapture(file);
     setCameraError(null);
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
     setPreview(URL.createObjectURL(file));
+    event.target.value = '';
   };
 
   const stopCamera = () => {
@@ -129,7 +157,14 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
               onClick={openFilePicker}
               className="text-xs font-semibold px-3 py-1.5 rounded-full bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors"
             >
-              Seleccionar imagen
+              Tomar con app de cámara
+            </button>
+            <button
+              type="button"
+              onClick={openGalleryPicker}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors"
+            >
+              Seleccionar de galería
             </button>
             {cameraError && (
               <p className="text-[11px] px-4 text-center text-amber-700">{cameraError}</p>
@@ -141,6 +176,13 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
           type="file"
           accept="image/*"
           capture="environment"
+          onChange={handleFileCapture}
+          className="hidden"
+        />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
           onChange={handleFileCapture}
           className="hidden"
         />
@@ -157,6 +199,7 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
                 ref={videoRef} 
                 autoPlay 
                 playsInline 
+                muted
                 className="flex-1 object-cover"
               />
               <div className="p-8 flex justify-between items-center bg-zinc-900">
