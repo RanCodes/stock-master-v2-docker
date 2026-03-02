@@ -11,9 +11,33 @@ const PORT = 3000;
 // Database setup
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir);
+  fs.mkdirSync(dataDir, { recursive: true });
 }
-const db = new Database(path.join(dataDir, "stock.db"));
+
+function ensureDatabase(dbPath: string) {
+  let db = new Database(dbPath);
+
+  try {
+    db.exec("PRAGMA journal_mode = WAL;");
+  } catch (error: any) {
+    if (error?.code !== "SQLITE_NOTADB") {
+      throw error;
+    }
+
+    db.close();
+    const corruptedPath = `${dbPath}.corrupt-${Date.now()}`;
+    fs.renameSync(dbPath, corruptedPath);
+    console.warn(`Invalid database file detected. Backed up to ${corruptedPath}`);
+
+    db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+  }
+
+  return db;
+}
+
+const dbPath = path.join(dataDir, "stock.db");
+const db = ensureDatabase(dbPath);
 db.exec(`
   CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
