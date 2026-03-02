@@ -23,26 +23,59 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const startCamera = async () => {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, 
-        audio: false 
-      });
-      setStream(s);
-      setShowCamera(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      alert("No se pudo acceder a la cámara en vivo. Puedes tomar una foto con el selector del celular.");
-      fileInputRef.current?.click();
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const openCameraPicker = () => cameraInputRef.current?.click();
+  const openGalleryPicker = () => galleryInputRef.current?.click();
+
+  const startLiveCamera = async () => {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Tu navegador no permite cámara en vivo aquí. Usa “Tomar foto” o “Galería”.');
+      openCameraPicker();
+      return;
     }
+
+    const constraints: MediaStreamConstraints[] = [
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      { video: true, audio: false }
+    ];
+
+    for (const constraint of constraints) {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia(constraint);
+        setCameraError(null);
+        setStream(mediaStream);
+        setShowCamera(true);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          videoRef.current.muted = true;
+          await videoRef.current.play();
+        }
+
+        return;
+      } catch (error) {
+        console.error('Error accessing live camera with constraints:', constraint, error);
+      }
+    }
+
+    setCameraError('No se pudo abrir la cámara en vivo. Se abrió el modo de cámara del celular.');
+    openCameraPicker();
+  };
+
+  const startCamera = async () => {
+    if (isMobile) {
+      openCameraPicker();
+      return;
+    }
+
+    await startLiveCamera();
   };
 
   const handleFileCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,6 +83,7 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
     if (!file) return;
 
     onCapture(file);
+    setCameraError(null);
     setPreview(URL.createObjectURL(file));
   };
 
@@ -76,7 +110,7 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
             setPreview(URL.createObjectURL(blob));
             stopCamera();
           }
-        }, 'image/jpeg', 0.8);
+        }, 'image/jpeg', 0.85);
       }
     }
   };
@@ -88,26 +122,49 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
         {preview ? (
           <div className="relative w-full h-full">
             <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-            <button 
+            <button
               type="button"
-              onClick={() => { setPreview(null); startCamera(); }}
+              onClick={() => {
+                setPreview(null);
+                setCameraError(null);
+              }}
               className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur rounded-full shadow-sm"
             >
               <X size={16} />
             </button>
           </div>
         ) : (
-          <button 
-            type="button"
-            onClick={startCamera}
-            className="flex flex-col items-center gap-2 text-zinc-400 hover:text-zinc-600 transition-colors"
-          >
-            <Camera size={32} />
-            <span className="text-sm font-medium">Capturar Foto</span>
-          </button>
+          <div className="flex flex-col items-center gap-3 text-zinc-500 px-4 text-center">
+            <button
+              type="button"
+              onClick={startCamera}
+              className="flex flex-col items-center gap-2 hover:text-zinc-700 transition-colors"
+            >
+              <Camera size={32} />
+              <span className="text-sm font-medium">Tomar foto</span>
+            </button>
+            <button
+              type="button"
+              onClick={openGalleryPicker}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors"
+            >
+              Elegir de galería
+            </button>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={startLiveCamera}
+                className="text-[11px] text-zinc-500 underline"
+              >
+                Usar cámara en vivo
+              </button>
+            )}
+            {cameraError && <p className="text-[11px] text-amber-700">{cameraError}</p>}
+          </div>
         )}
+
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
@@ -115,32 +172,35 @@ const CameraCapture = ({ onCapture, label }: { onCapture: (blob: Blob) => void, 
           className="hidden"
         />
 
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileCapture}
+          className="hidden"
+        />
+
         <AnimatePresence>
           {showCamera && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 bg-black flex flex-col"
             >
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                className="flex-1 object-cover"
-              />
+              <video ref={videoRef} autoPlay playsInline muted className="flex-1 object-cover" />
               <div className="p-8 flex justify-between items-center bg-zinc-900">
                 <button type="button" onClick={stopCamera} className="text-white p-4">
                   <X size={32} />
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={capture}
                   className="w-20 h-20 bg-white rounded-full border-4 border-zinc-400 flex items-center justify-center active:scale-95 transition-transform"
                 >
                   <div className="w-16 h-16 bg-white rounded-full border-2 border-zinc-900" />
                 </button>
-                <div className="w-16" /> {/* Spacer */}
+                <div className="w-16" />
               </div>
             </motion.div>
           )}
